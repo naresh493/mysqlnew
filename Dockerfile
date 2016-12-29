@@ -1,18 +1,33 @@
-FROM oraclelinux:7
+FROM ubuntu:trusty
+MAINTAINER naresh.b@clictest.com<ClicServices>
 
-ENV PACKAGE_URL https://repo.mysql.com/yum/mysql-5.5-community/docker/x86_64/mysql-community-server-minimal-5.5.54-2.el7.x86_64.rpm
+# Add MySQL configuration
+COPY my.cnf /etc/mysql/conf.d/my.cnf
+COPY mysqld_charset.cnf /etc/mysql/conf.d/mysqld_charset.cnf
 
-# Install server
-RUN rpmkeys --import http://repo.mysql.com/RPM-GPG-KEY-mysql \
-  && yum install -y $PACKAGE_URL \
-  && yum install -y libpwquality \
-  && rm -rf /var/cache/yum/*
-RUN mkdir /docker-entrypoint-initdb.d
+RUN apt-get update && \
+    apt-get -yq install mysql-server-5.5 pwgen && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm /etc/mysql/conf.d/mysqld_safe_syslog.cnf && \
+    if [ ! -f /usr/share/mysql/my-default.cnf ] ; then cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf; fi && \
+    mysql_install_db > /dev/null 2>&1 && \
+    touch /var/lib/mysql/.EMPTY_DB
 
-VOLUME /var/lib/mysql
+# Add MySQL scripts
+COPY import_sql.sh /import_sql.sh
+COPY run.sh /run.sh
 
-COPY docker-entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
+ENV MYSQL_USER=admin \
+    MYSQL_PASS=**Random** \
+    ON_CREATE_DB=**False** \
+    REPLICATION_MASTER=**False** \
+    REPLICATION_SLAVE=**False** \
+    REPLICATION_USER=replica \
+    REPLICATION_PASS=replica \
+    ON_CREATE_DB=**False**
+
+# Add VOLUMEs to allow backup of config and databases
+VOLUME  ["/etc/mysql", "/var/lib/mysql"]
 
 EXPOSE 3306
-CMD ["mysqld"]
+CMD ["/run.sh"]
